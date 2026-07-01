@@ -13,7 +13,7 @@ import org.springframework.web.multipart.MultipartFile;
 import java.io.File;
 import java.io.IOException;
 import java.time.LocalDateTime;
-import java.util.List;
+import java.util.*;
 
 @Service
 public class SpeechService {
@@ -185,6 +185,60 @@ public class SpeechService {
     }
 
     /**
+     * TTS status tekshirish
+     * ✅ API'dan status olish va agar ready bo'lsa audio URL olish
+     */
+    public Map<String, Object> checkTtsStatus(String ttsId) {
+        System.out.println("🔍 Checking TTS status for: " + ttsId);
+        
+        Map<String, Object> response = new HashMap<>();
+        
+        try {
+            // API'dan status tekshirish
+            JsonObject statusResponse = uzbekVoiceApiClient.checkTtsStatus(ttsId);
+            
+            if (statusResponse.has("status")) {
+                String status = statusResponse.get("status").getAsString();
+                response.put("status", status);
+                System.out.println("📊 Status: " + status);
+                
+                // Agar SUCCESS bo'lsa, audio URL'ni olish
+                if ("SUCCESS".equals(status)) {
+                    if (statusResponse.has("result") && statusResponse.get("result").isJsonObject()) {
+                        JsonObject result = statusResponse.get("result").getAsJsonObject();
+                        if (result.has("url")) {
+                            String audioUrl = result.get("url").getAsString();
+                            response.put("audioUrl", audioUrl);
+                            System.out.println("✅ Audio URL found: " + audioUrl);
+                            
+                            // DB'ga ham update qilamiz
+                            Optional<SpeechRecord> recordOpt = getRecordByExternalId(ttsId);
+                            if (recordOpt.isPresent()) {
+                                SpeechRecord record = recordOpt.get();
+                                record.setAudioUrl(audioUrl);
+                                record.setStatus("SUCCESS");
+                                record.setUpdatedAt(LocalDateTime.now());
+                                speechRepository.save(record);
+                                System.out.println("💾 Record updated with audio URL");
+                            }
+                        }
+                    }
+                } else {
+                    response.put("message", "TTS still processing");
+                }
+            } else {
+                response.put("error", "Status not available");
+            }
+            
+        } catch (Exception e) {
+            System.err.println("❌ Status check error: " + e.getMessage());
+            response.put("error", e.getMessage());
+        }
+        
+        return response;
+    }
+
+    /**
      * Barcha yozuvlarni olish
      */
     public List<SpeechRecord> getAllRecords() {
@@ -192,9 +246,16 @@ public class SpeechService {
     }
 
     /**
-     * ID bo'yicha yozuvni olish
+     * ID bo'yicha yozuvni olish (Database ID)
      */
     public SpeechRecord getRecordById(Long id) {
         return speechRepository.findById(id).orElse(null);
+    }
+
+    /**
+     * External ID bo'yicha yozuvni olish (Uzbekvoice API ID)
+     */
+    public Optional<SpeechRecord> getRecordByExternalId(String externalId) {
+        return speechRepository.findByExternalId(externalId);
     }
 }

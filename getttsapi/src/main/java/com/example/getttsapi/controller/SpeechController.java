@@ -82,11 +82,11 @@ public class SpeechController {
     }
 
     /**
-     * TTS status tekshirish va audio URL olish
-     * GET /api/v1/speech/tts/status/{ttsId}
+     * TTS status tekshirish va audio URL olish (Query parameter bilan)
+     * GET /api/v1/speech/status?ttsId=tts/uuid/uuid
      */
-    @GetMapping("/tts/status/{ttsId}")
-    public ResponseEntity<?> getTtsStatus(@PathVariable String ttsId) {
+    @GetMapping("/status")
+    public ResponseEntity<?> getTtsStatus(@RequestParam String ttsId) {
         try {
             System.out.println("🔍 Checking TTS status for ID: " + ttsId);
             Map<String, Object> status = speechService.checkTtsStatus(ttsId);
@@ -100,11 +100,11 @@ public class SpeechController {
     }
 
     /**
-     * Audio faylni URL orqali olish va download qilish
-     * GET /api/v1/speech/download/{ttsId}
+     * Audio faylni URL orqali olish va download qilish (Query parameter bilan)
+     * GET /api/v1/speech/download?ttsId=tts/uuid/uuid
      */
-    @GetMapping("/download/{ttsId}")
-    public ResponseEntity<?> downloadAudio(@PathVariable String ttsId) {
+    @GetMapping("/download")
+    public ResponseEntity<?> downloadAudio(@RequestParam String ttsId) {
         try {
             System.out.println("⬇️ Downloading audio for TTS ID: " + ttsId);
             
@@ -112,7 +112,10 @@ public class SpeechController {
             Optional<SpeechRecord> recordOpt = speechService.getRecordByExternalId(ttsId);
             
             if (recordOpt.isEmpty()) {
-                return ResponseEntity.notFound().build();
+                return ResponseEntity.status(HttpStatus.NOT_FOUND)
+                        .body(new HashMap<String, String>() {{
+                            put("error", "TTS record topilmadi");
+                        }});
             }
             
             SpeechRecord record = recordOpt.get();
@@ -126,16 +129,22 @@ public class SpeechController {
                 response.put("audioUrl", record.getAudioUrl());
                 response.put("status", record.getStatus());
                 response.put("createdAt", record.getCreatedAt());
+                response.put("updatedAt", record.getUpdatedAt());
+                
+                System.out.println("✅ Audio URL found: " + record.getAudioUrl());
                 return ResponseEntity.ok(response);
             } else {
                 // Agar hali ready bo'lmasa, status'ni tekshirish
                 Map<String, Object> status = speechService.checkTtsStatus(ttsId);
                 status.put("id", record.getId());
                 status.put("message", "TTS still processing, please check again later");
+                
+                System.out.println("⏳ TTS still processing");
                 return ResponseEntity.accepted().body(status);
             }
             
         } catch (Exception e) {
+            System.err.println("❌ Download error: " + e.getMessage());
             return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
                     .body(new HashMap<String, String>() {{
                         put("error", e.getMessage());
@@ -169,10 +178,10 @@ public class SpeechController {
 
     /**
      * External ID bo'yicha yozuv olish (Uzbekvoice API ID)
-     * GET /api/v1/speech/records/external/{externalId}
+     * GET /api/v1/speech/records/external?externalId=tts/uuid/uuid
      */
-    @GetMapping("/records/external/{externalId}")
-    public ResponseEntity<?> getRecordByExternalId(@PathVariable String externalId) {
+    @GetMapping("/records/external")
+    public ResponseEntity<?> getRecordByExternalId(@RequestParam String externalId) {
         Optional<SpeechRecord> record = speechService.getRecordByExternalId(externalId);
         if (record.isPresent()) {
             return ResponseEntity.ok(record.get());

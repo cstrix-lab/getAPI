@@ -15,6 +15,7 @@ import org.springframework.web.multipart.MultipartFile;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
 
 @RestController
 @RequestMapping("/api/v1/speech")
@@ -81,6 +82,68 @@ public class SpeechController {
     }
 
     /**
+     * TTS status tekshirish va audio URL olish
+     * GET /api/v1/speech/tts/status/{ttsId}
+     */
+    @GetMapping("/tts/status/{ttsId}")
+    public ResponseEntity<?> getTtsStatus(@PathVariable String ttsId) {
+        try {
+            System.out.println("🔍 Checking TTS status for ID: " + ttsId);
+            Map<String, Object> status = speechService.checkTtsStatus(ttsId);
+            return ResponseEntity.ok(status);
+        } catch (Exception e) {
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
+                    .body(new HashMap<String, String>() {{
+                        put("error", e.getMessage());
+                    }});
+        }
+    }
+
+    /**
+     * Audio faylni URL orqali olish va download qilish
+     * GET /api/v1/speech/download/{ttsId}
+     */
+    @GetMapping("/download/{ttsId}")
+    public ResponseEntity<?> downloadAudio(@PathVariable String ttsId) {
+        try {
+            System.out.println("⬇️ Downloading audio for TTS ID: " + ttsId);
+            
+            // Avval TTS record'ni ID bo'yicha olish
+            Optional<SpeechRecord> recordOpt = speechService.getRecordByExternalId(ttsId);
+            
+            if (recordOpt.isEmpty()) {
+                return ResponseEntity.notFound().build();
+            }
+            
+            SpeechRecord record = recordOpt.get();
+            
+            // Agar audio URL mavjud bo'lsa
+            if (record.getAudioUrl() != null && !record.getAudioUrl().isEmpty()) {
+                Map<String, Object> response = new HashMap<>();
+                response.put("id", record.getId());
+                response.put("externalId", record.getExternalId());
+                response.put("text", record.getText());
+                response.put("audioUrl", record.getAudioUrl());
+                response.put("status", record.getStatus());
+                response.put("createdAt", record.getCreatedAt());
+                return ResponseEntity.ok(response);
+            } else {
+                // Agar hali ready bo'lmasa, status'ni tekshirish
+                Map<String, Object> status = speechService.checkTtsStatus(ttsId);
+                status.put("id", record.getId());
+                status.put("message", "TTS still processing, please check again later");
+                return ResponseEntity.accepted().body(status);
+            }
+            
+        } catch (Exception e) {
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
+                    .body(new HashMap<String, String>() {{
+                        put("error", e.getMessage());
+                    }});
+        }
+    }
+
+    /**
      * Barcha yozuvlarni olish
      * GET /api/v1/speech/records
      */
@@ -91,7 +154,7 @@ public class SpeechController {
     }
 
     /**
-     * ID bo'yicha yozuv olish
+     * ID bo'yicha yozuv olish (Database ID)
      * GET /api/v1/speech/records/{id}
      */
     @GetMapping("/records/{id}")
@@ -99,6 +162,20 @@ public class SpeechController {
         SpeechRecord record = speechService.getRecordById(id);
         if (record != null) {
             return ResponseEntity.ok(record);
+        } else {
+            return ResponseEntity.notFound().build();
+        }
+    }
+
+    /**
+     * External ID bo'yicha yozuv olish (Uzbekvoice API ID)
+     * GET /api/v1/speech/records/external/{externalId}
+     */
+    @GetMapping("/records/external/{externalId}")
+    public ResponseEntity<?> getRecordByExternalId(@PathVariable String externalId) {
+        Optional<SpeechRecord> record = speechService.getRecordByExternalId(externalId);
+        if (record.isPresent()) {
+            return ResponseEntity.ok(record.get());
         } else {
             return ResponseEntity.notFound().build();
         }

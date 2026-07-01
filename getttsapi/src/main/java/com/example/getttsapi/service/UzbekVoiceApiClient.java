@@ -12,6 +12,7 @@ import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 
 import java.io.File;
+import java.nio.charset.StandardCharsets;
 
 @Service
 public class UzbekVoiceApiClient {
@@ -54,7 +55,7 @@ public class UzbekVoiceApiClient {
 
             System.out.println("🚀 Sending STT request...");
             org.apache.http.HttpResponse response = httpClient.execute(uploadFile);
-            String responseBody = EntityUtils.toString(response.getEntity());
+            String responseBody = EntityUtils.toString(response.getEntity(), StandardCharsets.UTF_8);
 
             int statusCode = response.getStatusLine().getStatusCode();
             System.out.println("📥 Status Code: " + statusCode);
@@ -96,23 +97,28 @@ public class UzbekVoiceApiClient {
         try (CloseableHttpClient httpClient = HttpClients.createDefault()) {
             HttpPost postRequest = new HttpPost(url);
             postRequest.setHeader("Authorization", apiKey);
-            postRequest.setHeader("Content-Type", "application/json");
+            postRequest.setHeader("Content-Type", "application/json; charset=UTF-8");
 
             JsonObject jsonBody = new JsonObject();
             jsonBody.addProperty("text", text);
             jsonBody.addProperty("model", model);
             jsonBody.addProperty("blocking", blocking);
-            jsonBody.addProperty("webhook_notification_url", "");
+            // 🔧 Webhook URL ni null o'rniga hali qoldirish, agar kerak bo'lsa o'chiriladi
+            // jsonBody.addProperty("webhook_notification_url", "");
 
             System.out.println("📤 Request Body: " + jsonBody.toString());
 
-            postRequest.setEntity(new org.apache.http.entity.StringEntity(jsonBody.toString()));
+            // ✅ UTF-8 encoding bilan StringEntity yaratish
+            postRequest.setEntity(new org.apache.http.entity.StringEntity(
+                    jsonBody.toString(), 
+                    StandardCharsets.UTF_8
+            ));
 
             System.out.println("🚀 Sending TTS request...");
             org.apache.http.HttpResponse response = httpClient.execute(postRequest);
 
             int statusCode = response.getStatusLine().getStatusCode();
-            String responseBody = EntityUtils.toString(response.getEntity());
+            String responseBody = EntityUtils.toString(response.getEntity(), StandardCharsets.UTF_8);
 
             System.out.println("📥 Status Code: " + statusCode);
             System.out.println("📥 Response Body: " + responseBody);
@@ -163,7 +169,7 @@ public class UzbekVoiceApiClient {
             org.apache.http.HttpResponse response = httpClient.execute(getRequest);
 
             int statusCode = response.getStatusLine().getStatusCode();
-            String responseBody = EntityUtils.toString(response.getEntity());
+            String responseBody = EntityUtils.toString(response.getEntity(), StandardCharsets.UTF_8);
 
             System.out.println("📥 Status Code: " + statusCode);
             System.out.println("📥 Response: " + responseBody);

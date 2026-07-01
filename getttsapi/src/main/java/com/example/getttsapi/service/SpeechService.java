@@ -100,7 +100,8 @@ public class SpeechService {
     }
 
     /**
-     * Matni nutqqa o'tkazish (TTS)
+     * Matni nutqqa o'tkazish (TTS) - ASYNC PROCESSING
+     * ✅ POLLING TIMEOUT OCHIRILDI - Async ishlaydi
      */
     public TtsResponse convertTextToSpeech(TtsRequest ttsRequest) {
         try {
@@ -144,10 +145,18 @@ public class SpeechService {
                 }
             }
 
-            // ❌ Agar status "PROGRESS" bo'lsa polling qilish
+            // ✅ POLLING TIMEOUT OCHIRILDI - ASYNC ISHLAYDI
             if (audioUrl == null && ttsId != null) {
-                System.out.println("⏳ Status PROGRESS, polling...");
-                audioUrl = pollForTtsResult(ttsId);
+                System.out.println("⏳ Status PROGRESS - Async mode (timeout yo'q)");
+                System.out.println("📌 Client ID sini saqlashi mumkin: " + ttsId);
+                
+                // Record sini save qilamiz PROCESSING holati bilan
+                speechRepository.save(record);
+                System.out.println("✅ Record saved to DB with PROCESSING status");
+                System.out.println("========== TTS REQUEST QUEUED FOR ASYNC ==========\n");
+                
+                // Faqat ID sini qaytaramiz, client keyinroq status tekshirishi mumkin
+                return new TtsResponse(ttsId, "wav", true);
             }
 
             if (audioUrl != null && !audioUrl.isEmpty()) {
@@ -173,49 +182,6 @@ public class SpeechService {
             e.printStackTrace();
             throw new RuntimeException("TTS xatosi: " + e.getMessage());
         }
-    }
-
-    /**
-     * Polling: TTS status tekshirish (maksimal 30 soniya)
-     */
-    private String pollForTtsResult(String ttsId) {
-        int maxAttempts = 30;
-        int attempt = 0;
-
-        while (attempt < maxAttempts) {
-            try {
-                Thread.sleep(1000);  // 1 soniya kutish
-                attempt++;
-
-                System.out.println("🔄 Poll attempt " + attempt + "/" + maxAttempts);
-
-                JsonObject statusResponse = uzbekVoiceApiClient.checkTtsStatus(ttsId);
-
-                if (statusResponse.has("status")) {
-                    String status = statusResponse.get("status").getAsString();
-                    System.out.println("📊 Status: " + status);
-
-                    if ("SUCCESS".equals(status)) {
-                        if (statusResponse.has("result") && statusResponse.get("result").isJsonObject()) {
-                            JsonObject result = statusResponse.get("result").getAsJsonObject();
-                            if (result.has("url")) {
-                                String url = result.get("url").getAsString();
-                                System.out.println("✅ Audio URL received after " + attempt + " attempts");
-                                return url;
-                            }
-                        }
-                    }
-                }
-
-            } catch (InterruptedException e) {
-                Thread.currentThread().interrupt();
-                System.err.println("❌ Polling interrupted: " + e.getMessage());
-                break;
-            }
-        }
-
-        System.err.println("❌ Polling timeout after " + maxAttempts + " attempts");
-        return null;
     }
 
     /**

@@ -103,8 +103,6 @@ public class UzbekVoiceApiClient {
             jsonBody.addProperty("text", text);
             jsonBody.addProperty("model", model);
             jsonBody.addProperty("blocking", blocking);
-            // 🔧 Webhook URL ni null o'rniga hali qoldirish, agar kerak bo'lsa o'chiriladi
-            // jsonBody.addProperty("webhook_notification_url", "");
 
             System.out.println("📤 Request Body: " + jsonBody.toString());
 
@@ -147,20 +145,26 @@ public class UzbekVoiceApiClient {
 
     /**
      * TTS Status tekshirish (Polling uchun)
+     * ✅ TUZATILGAN: ID format yo'l bo'yicha to'g'ri ko'rsatiladi
      */
     public JsonObject checkTtsStatus(String ttsId) {
-        // ❌ DUPLIKAT ID'ni olib tashlash
+        System.out.println("🔄 Raw TTS ID from API: " + ttsId);
+
+        // API response ID'da "tts/" prefix bor: tts/UUID/UUID
+        // Status check endpoint: /tts/{id} shaklida FAQAT ID qismi kerak
+        // Agar "tts/" prefix bor bo'lsa, uni kesamiz
         String cleanId = ttsId;
         if (ttsId.startsWith("tts/")) {
-            // Agar "tts/" bilan boshlansa, faqat ID qismini olish
-            cleanId = ttsId.substring(4); // "tts/" o'rnini kesish
+            cleanId = ttsId.substring(4); // "tts/" o'rnini kesish -> UUID/UUID
+            System.out.println("✂️  Removed 'tts/' prefix");
         }
 
         String url = apiUrl + "/tts/" + cleanId;
 
-        System.out.println("🔄 Checking TTS status: " + url);
+        System.out.println("🔄 Checking TTS status");
         System.out.println("📌 Original ID: " + ttsId);
         System.out.println("📌 Clean ID: " + cleanId);
+        System.out.println("🔗 Full URL: " + url);
 
         try (CloseableHttpClient httpClient = HttpClients.createDefault()) {
             HttpGet getRequest = new HttpGet(url);
@@ -179,6 +183,8 @@ public class UzbekVoiceApiClient {
             } else {
                 JsonObject error = new JsonObject();
                 error.addProperty("error", "Status check failed");
+                error.addProperty("statusCode", statusCode);
+                error.addProperty("message", responseBody);
                 return error;
             }
 
